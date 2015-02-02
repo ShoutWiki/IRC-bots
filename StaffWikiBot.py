@@ -1,6 +1,12 @@
 # -*- coding: cp1252 -*-
 """
-    RecentChanges bot for ShoutWiki
+    Bot for staff wiki
+
+    Requirements:
+        * Python 2.7
+        * Twisted 14.0.0 (https://twistedmatrix.com)
+        * bugzillatools 0.5.3.1 (https://pypi.python.org/pypi/bugzillatools)
+    
 
     Usage:
     Add the following to LocalSettings.php
@@ -8,14 +14,14 @@
         $wgRCFeeds['exampleirc'] = array(
             'formatter' => 'IRCColourfulRCFeedFormatter',
             'uri' => 'udp://localhost:1338',
-            'add_interwiki_prefix' => true, 
+            'add_interwiki_prefix' => false, 
             'omit_bots' => true,
         );
 
 
     @version 0.2
     @author Richard Cook <cook879@shoutwiki.com>
-    @copyright Copyright © 2015 ShoutWiki
+    @copyright Copyright © 2014 Richard Cook
     @license http://www.gnu.org/copyleft/gpl.html GNU General Public License 3.0 or later
 """
 
@@ -23,14 +29,13 @@
 # User-defined variables
 HOST = "irc.freenode.net"
 IRC_PORT = 6667
-CHANNEL = "#ShoutWiki-cvn" 
-#CHANNEL = "#cook879" # test channel
-NICKNAME = "ShoutWikiRC"
+#CHANNEL = "#ShoutWiki-staff" 
+CHANNEL = "#cook879" # test channel
+NICKNAME = "StaffWikiRC"
 UDP_PORT = 1338
 IRC_OPERATOR = '@unaffiliated/cook879'
 IRC_OPERATOR2 = '@wikimedia/Lcawte'
 IRC_OPERATOR3 = '@MediaWiki/Jack-Phoenix'
-
 # End user-defined variables
 
 
@@ -42,7 +47,7 @@ from twisted.python import log
 
 recver = None
 
-class ShoutWikiBot( irc.IRCClient ):
+class StaffWikiBot( irc.IRCClient ):
     """ Bot class inherits from irc.IRCClient
             see https://twistedmatrix.com/documents/14.0.0/api/twisted.words.protocols.irc.IRCClient.html
     """
@@ -62,19 +67,56 @@ class ShoutWikiBot( irc.IRCClient ):
         self.msg( CHANNEL, broadcast )
 
     def privmsg( self, user, channel, message ):
+        """ Processes messages
+
+            Quits if operator private messages the bot 'quit'
+
+            Responds appropriately to known triggers
+
+            Links to revisions on Code Review
+
+            Links to tickets in osTicket
+        """
+        
         if channel.lower() == self.nickname.lower():
             if re.search( IRC_OPERATOR, user ) or re.search( IRC_OPERATOR2, user ) or re.search( IRC_OPERATOR3, user ):
                 if message.lower() == 'quit':
                     reactor.stop()
+        elif channel.lower() == CHANNEL:
+            # I'm sure there's more than 3 important pages :P
+            if re.search( "^!private", message ):
+                self.msg( CHANNEL, "Private wiki code: https://staff.shoutwiki.com/wiki/Private_wiki" )
+            elif re.search( "^!social", message ):
+                self.msg( CHANNEL, "Social tools: https://staff.shoutwiki.com/wiki/Social_tools" )
+                self.msg( CHANNEL, "Social tools installation guide: https://staff.shoutwiki.com/wiki/KB:Installing_social_profile" )
+            elif re.search( "^!targets", message ):
+                self.msg( CHANNEL, "Our targets for the year: https://staff.shoutwiki.com/wiki/ShoutWiki_2014" )
 
+            elif re.search( "r[0-9]+", message ):
+                revisions = re.findall( "r[0-9]+", message )
+                for revision in revisions:
+                    rNo = revision[1:]
+                    self.msg( CHANNEL, "https://staff.shoutwiki.com/wiki/Special:Code/ShoutWiki/" + rNo )
 
-class ShoutWikiBotFactory( protocol.ClientFactory ):
+            elif re.search( "ticket #[0-9]+", message ):
+                tickets = re.findall( "ticket #[0-9]+", message )
+                for ticket in tickets:
+                    tNo = ticket[8:]
+                    self.msg( CHANNEL, "https://support.shoutwiki.com/scp/tickets.php?id=" + tNo )
+
+            elif re.search( "bug #[0-9]+", message ):
+                bugs = re.findall( "bug #[0-9]+", message)
+                for bug in bugs:
+                    bNo = bug[5:]
+                    self.msg( CHANNEL, "https://bugzilla.shoutwiki.com/show_bug.cgi?id=" + bNo )
+                
+class StaffWikiBotFactory( protocol.ClientFactory ):
     """ Factory class inherits from ClientFactory
             see https://twistedmatrix.com/documents/14.0.0/api/twisted.internet.protocol.ClientFactory.html
     """
 
     def buildProtocol( self, addr ):
-        b = ShoutWikiBot()
+        b = StaffWikiBot()
         b.factory = self
         return b
 
@@ -83,7 +125,7 @@ class ShoutWikiBotFactory( protocol.ClientFactory ):
         connector.connect()
 
     def clientConnectionFailed( self, connector, reason ):
-        print "Connection failed: ", reason
+        print("Connection failed: ", reason)
         connector.connect()
 
 class Echo( protocol.DatagramProtocol ):
@@ -97,7 +139,7 @@ class Echo( protocol.DatagramProtocol ):
         recver.gotUDP( data )
     
 # Create factory protocol and application
-f = ShoutWikiBotFactory()
+f = StaffWikiBotFactory()
 
 # UDP stuff
 reactor.listenUDP( UDP_PORT, Echo() )
